@@ -1,14 +1,14 @@
 {
   "name": "firebase-telegram",
   "version": "1.0.0",
-  "description": "Send Firebase Realtime Database updates to Telegram",
+  "description": "Realtime Firebase → Telegram integration",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "firebase-admin": "^11.12.0",
-    "node-telegram-bot-api": "^0.61.0"
+    "firebase-admin": "^12.0.0",
+    "node-fetch": "^3.3.0"
   }
 }
